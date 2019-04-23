@@ -1,0 +1,83 @@
+
+QUESTIONS
+1. should client stay alive even after the song has finished being played? 
+
+
+Thing to know
+server needs to explicity assign IDs to songs
+
+What types of messages does your jukebox protocol send, and what do they mean?
+LIST : retrieve the list of songs
+
+PLAY : play song with the requested ID
+
+STOP : stop the music
+
+2. How are your messages formatted?  Are they text or binary, and what does the header look like?  How do you determine where one message ends and another begins?
+
+LIST
+C->S: [Method] [Protocol/Version]
+		[Session] (ID for a particular thread)
+
+S->C: [Protocol/Version] [STATUS]
+		[the list of songs in text]
+		[Session] 
+		
+		
+PLAY
+C->S: [Method] [ID] [Protocol/Version]
+		[Session]
+S->C: [Protocol/Version] [STATUS]
+		[URL of the song]
+		[Session] 
+		
+
+STOP
+C->S: [Method] [ID] [Protocol/Version]
+		[Session]
+S->C: [Protocol/Version] [STATUS]
+		[Session] 
+		
+
+
+text-based, just like RTSP.
+
+Session will function as an indicator of the end of the message. In detail, if the charater or string being read is 'Session: ' and is followed by a 8-digit number, then it is the end of the message.
+
+3. What type of state does the server need to store per-client?  What does that state mean (e.g., the fields in the client struct)?
+it stores the status telling you whether a song is being played or not (isSongPlayed)
+
+
+
+
+4. How do messages transition the client/server from one state to another?
+
+client
+client is waiting for server's response (isSongPlayed=False)
+when server's response is received, it starts playing (isSongPlayed=True)
+the song keeps playing (isSongPlayed=True)
+	1. if the buffer is not empty 
+	2. if client does not request stop 
+
+when the song is not being played, isSongPlayed=False
+
+server
+server is waiting for client's request (isSongPlayed=False)
+when client's request for playing a song, it starts playing (isSongPlayed=True)
+isSongPlayed becomes False when
+	1. the buffer is empty 
+	2. client request stop 
+
+when the song is not being played, isSongPlayed=False
+
+
+
+5. Anything else I should know about the way it works?
+
+some of hte messages, if it is syntatically wrong (e.g. typo), will be handled on the client-side
+also, if the messages are syntatically correct but has extra information that server does not recognize, then the client will disregard the messages 
+
+the other typical messages such as 404 or 500 will be dealt on the server-side
+
+
+
