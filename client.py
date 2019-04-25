@@ -100,24 +100,36 @@ def main():
             cmd = line
 
         # TODO: Send messages to the server when the user types things.
-        # if list, code is 0
-        # if play, code is 1
-        # if stop, code is 2
-        code = 0
+        # if list, method is 'LIST'
+        # if play, method is 'PLAY'
+        # if stop, method is 'STOP'
+        song_id = ''
+        method = ''
+        protocol = 'MyProtocol'
         if cmd in ['l', 'list']:
             print 'The user asked for list.'
-            code = 1
+            method = 'LIST'
 
         if cmd in ['p', 'play']:
             print 'The user asked to play:', args
-            code = 2
+            method = 'PLAY'
+            
+            song_id = args
 
         if cmd in ['s', 'stop']:
             print 'The user asked for stop.'
-            code = 3
+            method = 'STOP'
 
         # write the command to server socket
-        sock.send(code)
+        messageStr = method + " "
+        if (song_id != ''):
+            messageStr = messageStr + song_id
+        messagestr = messageStr + " " + protocol
+        sock.send(messagestr)
+        sock.send("\n")
+        sock.close()
+
+
 
         if cmd in ['quit', 'q', 'exit']:
             sys.exit(0)

@@ -6,20 +6,24 @@ import struct
 import sys
 from threading import Lock, Thread
 
-code_received = -1
 songlist_to_send = []
 QUEUE_LENGTH = 10
 SEND_BUFFER = 4096
 
 # per-client struct
 class Client:
-    def __init__(self, server_socket, songlist):
+    def __init__(self, server_socket):
         self.lock = Lock()
         #self.server_socket = server_socket
-        conn, addr = server_socket.accept() 
-        self.conn = conn
-        self.addr = addr
-        self.songs_list = songlist
+        self.server_sock = server_socket 
+        # self.conn = conn
+        # self.addr = addr
+        self.method = ''
+
+        self.song_id = None
+        self.song_list = None
+
+
 
 
 # TODO: Thread that sends music and lists to the client.  All send() calls
@@ -27,27 +31,41 @@ class Client:
 # be passed to this thread through the associated Client object.  Make sure you
 # use locks or similar synchronization tools to ensure that the two threads play
 # nice with one another!
-def client_write(client, code_received):
-    # if list, code is 0
-    # if play, code is 1
-    # if stop, code is 2
+def client_write(client):
 
-    if (code_received == 0):
-        songlist_to_send = client.songs_list
-    elif (code_received == 1):
-
-    elif (code_received == 2):
+    if (client.method == 'LIST'):
+        
+    elif (client.method == 'PLAY'):
+        
+        while (True):
+            # data_read = open("filename", "r").read(SEND_BUFFER)
+            # use conn of client to send the data_read (e.g. conn.send(data_read))
+    elif (client.method == 'STOP'):
 
 
 
 # TODO: Thread that receives commands from the client.  All recv() calls should
 # be contained in this function.
 def client_read(client):
-    # if list, code is 0
-    # if play, code is 1
-    # if stop, code is 2
-    code_received = client.conn.recv(1)
-        
+    conn, addr = client.server_socket.accept()
+    message_received = client.conn.recv(SEND_BUFFER)
+
+    print (message_received)
+
+    # check the protocol?
+
+    # parse the message
+    arguments_list = message_received.split(" ")
+
+    # add the argument to the data
+    client.method = arguments_list[0]
+
+    if (client.method == 'PLAY'):
+        client.song_id = arguments_list[1]
+
+
+
+    
 
 
 
@@ -84,7 +102,7 @@ def main():
     threads = []
 
     # TODO: create a socket and accept incoming connections
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(('', port))
     s.listen(QUEUE_LENGTH)
@@ -95,7 +113,7 @@ def main():
     # how can the server 
     while True:
 
-        client = Client(s, songlist)
+        client = Client(s)
         t = Thread(target=client_read, args=(client))
         threads.append(t)
         t.start()
