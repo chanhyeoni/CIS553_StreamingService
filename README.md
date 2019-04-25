@@ -1,5 +1,16 @@
 # Project 6: Streaming Music Service
 
+### HOW TO START
+open two separate terminals
+on server.py
+    ```shell
+        python server.py 8080 ./music
+    ```
+on client.py
+    ```shell
+        python client.py 127.0.0.1 8080
+    ```
+
 In this project, you'll be designing and implementing a protocol of your own design to build a streaming music service.
 In class, we discussed a few approaches to building such a service: simple HTTP gets, a custom streaming protocol like RTSP, or DASH-like chunking via HTTP.
 For this project, we want you to try your hand at a custom protocol to learn all of the concerns that go into constructing one.

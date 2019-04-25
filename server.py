@@ -87,27 +87,36 @@ def main():
     threads = []
 
     # TODO: create a socket and accept incoming connections
-    s= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(('', port))
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    s.bind(('127.0.0.1', port))
     s.listen(QUEUE_LENGTH)
 
 
-
+    
+    print "listening..."
+    conn, addr = s.accept()
+    print "connected!"
     # how can the server 
+    client = Client()
     while True:
-        print "listening..."
-        conn, addr = s.accept()
-        print "connected!"
-        client = Client()
         message_received = conn.recv(SEND_BUFFER)
 
         t1 = Thread(target=client_read, args=(client, message_received))
-        threads.append(t1)
         t1.start()
+        threads.append(t1)
+    
         t2 = Thread(target=client_write, args=(client,))
-        threads.append(t2)
         t2.start()
+        threads.append(t2)
+
+    conn.close()
+
+    if (cone != None):
+        cone.close()
+
+    # for t in threads:
+    #     t.join()
 
 
 

@@ -129,10 +129,12 @@ def main():
         # write the command to server socket
 
         sock.send(data_to_send)
+        print "sock sent the data!"
         
         if cmd in ['quit', 'q', 'exit']:
             sock.close()
             sys.exit(0)
+
 
     sock.close()
 
