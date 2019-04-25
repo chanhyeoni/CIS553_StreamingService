@@ -6,22 +6,19 @@ import struct
 import sys
 from threading import Lock, Thread
 
-songlist_to_send = []
+songs_dic = {} # map from id to the filename for the song
 QUEUE_LENGTH = 10
 SEND_BUFFER = 4096
 
 # per-client struct
 class Client:
-    def __init__(self, server_socket):
+    def __init__(self):
         self.lock = Lock()
         #self.server_socket = server_socket
-        self.server_sock = server_socket 
-        # self.conn = conn
         # self.addr = addr
         self.method = ''
-
-        self.song_id = None
-        self.song_list = None
+        self.song_id = -1
+        self.protocol = ''
 
 
 
@@ -34,61 +31,47 @@ class Client:
 def client_write(client):
 
     if (client.method == 'LIST'):
-        
+        print ("it is LIST")
     elif (client.method == 'PLAY'):
-        
-        while (True):
-            # data_read = open("filename", "r").read(SEND_BUFFER)
+        print ("it is PLAY --> song_id: " + str(client.song_id))
+        # while (True):
+        #     data_read = open("filename", "r").read(SEND_BUFFER)
             # use conn of client to send the data_read (e.g. conn.send(data_read))
     elif (client.method == 'STOP'):
+        print ("it is STOP")
 
 
 
 # TODO: Thread that receives commands from the client.  All recv() calls should
 # be contained in this function.
-def client_read(client):
-    conn, addr = client.server_socket.accept()
-    message_received = client.conn.recv(SEND_BUFFER)
+def client_read(client, message_received):
 
-    print (message_received)
-
-    # check the protocol?
+    message_decoded = struct.unpack('4sI10s', message_received)
+    print (message_decoded)
 
     # parse the message
-    arguments_list = message_received.split(" ")
-
-    # add the argument to the data
-    client.method = arguments_list[0]
-
-    if (client.method == 'PLAY'):
-        client.song_id = arguments_list[1]
-
-
-
-    
-
-
+    client.method = message_decoded[0]
+    client.song_id = message_decoded[1]
+    client.protocol = message_decoded[2]
 
 
 def get_mp3s(musicdir):
     print("Reading music files...")
     songs = []
-    songlist = []
-
     for filename in os.listdir(musicdir):
         if not filename.endswith(".mp3"):
             continue
         else:
-            songlist.append(filename)
-
+            filesize = os.path.getsize(musicdir + "/" + filename)
+            data = {'name': filename, 'size': filesize}
+            songs.append(data)
+            
         # TODO: Store song metadata for future use.  You may also want to build
         # the song list once and send to any clients that need it.
-        
-        songs.append(None)
 
     print("Found {0} song(s)!".format(len(songs)))
 
-    return songs, songlist
+    return songs
 
 
 def main():
@@ -96,6 +79,8 @@ def main():
         sys.exit("Usage: python server.py [port] [musicdir]")
     if not os.path.isdir(sys.argv[2]):
         sys.exit("Directory '{0}' does not exist".format(sys.argv[2]))
+
+
 
     port = int(sys.argv[1])
     songs, songlist = get_mp3s(sys.argv[2])
@@ -107,20 +92,22 @@ def main():
     s.bind(('', port))
     s.listen(QUEUE_LENGTH)
 
-    # I feel like Client objects should be created as many as QUEUE_LENGTH
 
 
     # how can the server 
     while True:
+        print "listening..."
+        conn, addr = s.accept()
+        print "connected!"
+        client = Client()
+        message_received = conn.recv(SEND_BUFFER)
 
-        client = Client(s)
-        t = Thread(target=client_read, args=(client))
-        threads.append(t)
-        t.start()
-        t = Thread(target=client_write, args=(client))
-        threads.append(t)
-        t.start()
-
+        t1 = Thread(target=client_read, args=(client, message_received))
+        threads.append(t1)
+        t1.start()
+        t2 = Thread(target=client_write, args=(client,))
+        threads.append(t2)
+        t2.start()
 
 
 

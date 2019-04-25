@@ -36,6 +36,9 @@ class mywrapper(object):
 def recv_thread_func(wrap, cond_filled, sock):
     while True:
         # TODO
+        # pase the socket message
+        # get the body (lets call it body_byte)
+        # wrap.data = wrap.data + body_byte
         pass
 
 
@@ -48,9 +51,10 @@ def play_thread_func(wrap, cond_filled, dev):
         """
         TODO
         example usage of dev and wrap (see mp3-example.py for a full example):
-        buf = wrap.mf.read()
+        buf = wrap.mf.read(size)
         dev.play(buffer(buf), len(buf))
         """
+        pass
 
 
 def main():
@@ -106,33 +110,31 @@ def main():
         song_id = ''
         method = ''
         protocol = 'MyProtocol'
-        if cmd in ['l', 'list']:
+        data_to_send = None
+        if cmd in ['l', 'list', 'L', 'LIST']:
             print 'The user asked for list.'
             method = 'LIST'
-
-        if cmd in ['p', 'play']:
+            data_to_send = struct.pack('4sI10s', method, 0, protocol)
+        if cmd in ['p', 'play', 'P', 'PLAY']:
             print 'The user asked to play:', args
             method = 'PLAY'
-            
-            song_id = args
+            song_id = int(args)
+            data_to_send = struct.pack('4sI10s', method, song_id, protocol)
 
-        if cmd in ['s', 'stop']:
+        if cmd in ['s', 'stop', 'S', 'STOP']:
             print 'The user asked for stop.'
             method = 'STOP'
+            data_to_send = struct.pack('4sI10s', method, 0, protocol)
 
         # write the command to server socket
-        messageStr = method + " "
-        if (song_id != ''):
-            messageStr = messageStr + song_id
-        messagestr = messageStr + " " + protocol
-        sock.send(messagestr)
-        sock.send("\n")
-        sock.close()
 
-
-
+        sock.send(data_to_send)
+        
         if cmd in ['quit', 'q', 'exit']:
+            sock.close()
             sys.exit(0)
+
+    sock.close()
 
 if __name__ == '__main__':
     main()
