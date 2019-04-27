@@ -39,6 +39,7 @@ def recv_thread_func(wrap, cond_filled, sock):
         # pase the socket message
         # get the body (lets call it body_byte)
         # wrap.data = wrap.data + body_byte
+
         pass
 
 
@@ -115,24 +116,29 @@ def main():
             print 'The user asked for list.'
             method = 'LIST'
             data_to_send = struct.pack('4sI10s', method, 0, protocol)
-        if cmd in ['p', 'play', 'P', 'PLAY']:
+            sock.send(data_to_send)
+        elif cmd in ['p', 'play', 'P', 'PLAY']:
             print 'The user asked to play:', args
             method = 'PLAY'
             song_id = int(args)
             data_to_send = struct.pack('4sI10s', method, song_id, protocol)
-
-        if cmd in ['s', 'stop', 'S', 'STOP']:
+            sock.send(data_to_send)
+        elif cmd in ['s', 'stop', 'S', 'STOP']:
             print 'The user asked for stop.'
             method = 'STOP'
             data_to_send = struct.pack('4sI10s', method, 0, protocol)
+            sock.send(data_to_send)
+        elif cmd in ['e', 'exit', 'E', 'EXIT']:
+            print 'The user asked for exit (killing the client).'
+            method = 'EXIT'
+            data_to_send = struct.pack('4sI10s', method, 0, protocol)
+            sock.send(data_to_send)
+            # write the command to server socket
+        else:
+            continue
 
-        # write the command to server socket
 
-        sock.send(data_to_send)
-        print "sock sent the data!"
-        
         if cmd in ['quit', 'q', 'exit']:
-            sock.close()
             sys.exit(0)
 
 
