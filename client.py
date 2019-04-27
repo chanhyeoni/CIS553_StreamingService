@@ -10,7 +10,7 @@ import threading
 from time import sleep
 
 HEADER_LEN = 20 # (10,6,4)
-RECV_BUFFER = 64 + HEADER_LEN
+RECV_BUFFER = 2 + HEADER_LEN
 
 # The Mad audio library we're using expects to be given a file object, but
 # we're not dealing with files, we're reading audio data over the network.  We
@@ -40,20 +40,27 @@ def recv_thread_func(wrap, cond_filled, sock):
     
     while True:
         cond_filled.acquire()
-        print  "recv_thread_func " + str(sock.getsockname()[1]) + " listening ... "
+        # print  "recv_thread_func " + str(sock.getsockname()[1]) + " listening ... "
         message_received = sock.recv(RECV_BUFFER)
         message_format = '10sI4s' + str(RECV_BUFFER-HEADER_LEN) + 's'
-        print  "message_format=" + message_format
         message_decoded = struct.unpack(message_format, message_received)
+        # sys.stderr.write(str(message_decoded) + "\n")
+
+        protocol = message_decoded[0]
+        status = message_decoded[1]
+        method = message_decoded[2]
+
+        # partial read
+        
+        sys.stderr.write(message_decoded[3])
 
 
         
-        sys.stderr.write(str(message_decoded))
         
-        # if ("this is the song data"):
-        #     wrap.data = wrap.data + body_byte (add data to wrapper)
+        
+        # if (message_decoded):
+        #     #wrap.data = wrap.data + body_byte (add data to wrapper)
         #     cond_filled.notify()
-        # else:
 
 
         
@@ -67,7 +74,7 @@ def recv_thread_func(wrap, cond_filled, sock):
 # using it too!
 def play_thread_func(wrap, cond_filled, dev):
     while True:
-
+        # print ("I got the song!")
         """
         TODO
         example usage of dev and wrap (see mp3-example.py for a full example):
@@ -115,50 +122,61 @@ def main():
     # Enter our never-ending user I/O loop.  Because we imported the readline
     # module above, raw_input gives us nice shell-like behavior (up-arrow to
     # go backwards, etc.).
+    song_id = ''
+    method = ''
+    protocol = 'MyProtocol'
+    data_to_send = None
     while True:
-        line = raw_input('>> ')
+        try:
+            line = raw_input('>> ')
 
-        if ' ' in line:
-            cmd, args = line.split(' ', 1)
-        else:
-            cmd = line
+            if ' ' in line:
+                cmd, args = line.split(' ', 1)
+            else:
+                cmd = line
 
-        # TODO: Send messages to the server when the user types things.
-        # if list, method is 'LIST'
-        # if play, method is 'PLAY'
-        # if stop, method is 'STOP'
-        song_id = ''
-        method = ''
-        protocol = 'MyProtocol'
-        data_to_send = None
-        if cmd in ['l', 'list', 'L', 'LIST']:
-            print 'The user asked for list.'
-            method = 'LIST'
-            data_to_send = struct.pack('4sI10s', method, 0, protocol)
-            sock.send(data_to_send)
-        elif cmd in ['p', 'play', 'P', 'PLAY']:
-            print 'The user asked to play:', args
-            method = 'PLAY'
-            song_id = int(args)
-            data_to_send = struct.pack('4sI10s', method, song_id, protocol)
-            sock.send(data_to_send)
-        elif cmd in ['s', 'stop', 'S', 'STOP']:
-            print 'The user asked for stop.'
-            method = 'STOP'
-            data_to_send = struct.pack('4sI10s', method, 0, protocol)
-            sock.send(data_to_send)
-        elif cmd in ['e', 'exit', 'E', 'EXIT']:
+            # TODO: Send messages to the server when the user types things.
+            # if list, method is 'LIST'
+            # if play, method is 'PLAY'
+            # if stop, method is 'STOP'
+
+            if cmd in ['l', 'list', 'L', 'LIST']:
+                print 'The user asked for list.'
+                method = 'LIST'
+                data_to_send = struct.pack('4sI10s', method, 0, protocol)
+                sock.send(data_to_send)
+            elif cmd in ['p', 'play', 'P', 'PLAY']:
+                print 'The user asked to play:', args
+                method = 'PLAY'
+                song_id = int(args)
+                data_to_send = struct.pack('4sI10s', method, song_id, protocol)
+                sock.send(data_to_send)
+            elif cmd in ['s', 'stop', 'S', 'STOP']:
+                print 'The user asked for stop.'
+                method = 'STOP'
+                data_to_send = struct.pack('4sI10s', method, 0, protocol)
+                sock.send(data_to_send)
+            elif cmd in ['e', 'exit', 'E', 'EXIT']:
+                print 'The user asked for exit (killing the client).'
+                method = 'EXIT'
+                data_to_send = struct.pack('4sI10s', method, 0, protocol)
+                sock.send(data_to_send)
+                # write the command to server socket
+            else:
+                continue
+
+
+            if cmd in ['quit', 'q', 'exit']:
+                sys.exit(0)
+
+        except (KeyboardInterrupt, SystemExit):
+            print "main --> keyboardInterrupt"
             print 'The user asked for exit (killing the client).'
             method = 'EXIT'
             data_to_send = struct.pack('4sI10s', method, 0, protocol)
             sock.send(data_to_send)
-            # write the command to server socket
-        else:
-            continue
-
-
-        if cmd in ['quit', 'q', 'exit']:
             sys.exit(0)
+
 
 
     sock.close()
