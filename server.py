@@ -9,8 +9,14 @@ import time
 
 songs_list = [] # map from id to the filename for the song
 QUEUE_LENGTH = 10
-SEND_BUFFER = 4096
+SEND_BUFFER = 64
 close_threads = False
+response_code = {
+    200 : 'OK',
+    404 : 'Not Found',
+    500 : 'Server Error'
+}
+accepted_methods = ['LIST', 'PLAY', 'STOP', 'EXIT']
 
 # per-client struct
 class Client:
@@ -20,9 +26,42 @@ class Client:
         # self.addr = addr
         self.method = ''
         self.song_id = -1
-        self.protocol = ''
+        self.protocol = 'MyProtocol'
 
 
+def send_response(client, client_socket, status, content_body):
+
+    # header
+    header_message_length = '10sI4s'
+    # data_to_send = struct.pack(header_message_length,)
+    # client_socket.send(data_to_send)
+
+    # send body
+    if (len(content_body) <= SEND_BUFFER):
+        message_length = header_message_length + str(SEND_BUFFER) + "s"
+        print "message_length=" + message_length
+        data_to_send = struct.pack(message_length, client.protocol, status, client.method, content_body)
+        client_socket.send(data_to_send)
+    else:
+        while True:
+            partial_content = content_body[:SEND_BUFFER]
+            content_body = content_body[SEND_BUFFER:]
+            remaining_bytes = len(content_body)
+
+            message_length = header_message_length + str(SEND_BUFFER) + "s"
+            print "message_length=" + message_length
+            data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
+            client_socket.send(data_to_send)  
+
+            if (remaining_bytes == 0):
+                break
+            elif (remaining_bytes < SEND_BUFFER):
+                partial_content = content_body
+                message_length = header_message_length + str(SEND_BUFFER) + "s"
+                print "message_length=" + message_length
+                data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
+                client_socket.send(data_to_send)  
+                break               
 
 
 # TODO: Thread that sends music and lists to the client.  All send() calls
@@ -35,33 +74,32 @@ def client_write(client, client_socket, client_port, songs_list):
     while not close_threads:
         client.lock.acquire()
         try:
-            message_body = " "
-            if (client.method == 'LIST'):
-                print ("it is LIST")
-                for i in range(len(songs_list)):
-                    song_tuple = (i+1, songs_list[i]['name'])
-                    message_body = message_body + str(song_tuple)
-                    if (i < len(songs_list)-1):
-                        message_body = message_body + ", "
+            if (client.method in accepted_methods):
+                content_body = ""
+                if (client.method == 'LIST'):
+                    print ("it is LIST")
+                    for i in range(len(songs_list)):
+                        song_tuple = (i+1, songs_list[i]['name'])
+                        content_body = content_body + str(song_tuple)
+                        if (i < len(songs_list)-1):
+                            content_body = content_body + ", "
+                elif (client.method == 'PLAY'):
+                    print ("it is PLAY --> song_id: " + str(client.song_id))
+                    # while (True):
+                    #     data_read = open("filename", "r").read(SEND_BUFFER)
+                        # use conn of client to send the data_read (e.g. conn.send(data_read))
+                elif (client.method == 'STOP'):
+                    print ("it is STOP")
+                elif (client.method == 'EXIT'):
+                    print ("it is EXIT")
+                    close_threads = True
+                    break
+                # else:
+                #     print ("client_write listening...")
+                send_response(client, client_socket, 200, content_body)
+                
 
-                print message_body
-                # for i in range(len(songs)):
-                #     song_tuple = (i+1, songs[i]['name'])
-            elif (client.method == 'PLAY'):
-                print ("it is PLAY --> song_id: " + str(client.song_id))
-                # while (True):
-                #     data_read = open("filename", "r").read(SEND_BUFFER)
-                    # use conn of client to send the data_read (e.g. conn.send(data_read))
-            elif (client.method == 'STOP'):
-                print ("it is STOP")
-            elif (client.method == 'EXIT'):
-                print ("it is EXIT")
-                close_threads = True
-                break
-            # else:
-            #     print ("client_write listening...")
-            client.method = ''
-            
+
         except (KeyboardInterrupt, SystemExit):
             print "client_write --> keyboardInterrupt"
             close_threads = True
@@ -73,8 +111,16 @@ def client_write(client, client_socket, client_port, songs_list):
             else:
                 print(e)
 
-            close_threads = True
-            break
+            # create 500 response
+            message = 'Server Error'
+            message_format = '10sI' + str(len(message)) + 's'
+            data_to_send = struct.pack(message_format, client.protocol, 500, message)
+            client_socket.send(data_to_send) 
+
+            # close_threads = True
+            # break
+
+        client.method = ''
         client.lock.release()
 
 
@@ -116,8 +162,6 @@ def client_read(client, client_socket, client_port):
                 print(e)
             close_threads = True
             break
-        
-
 
 
 def get_mp3s(musicdir):
@@ -137,6 +181,7 @@ def get_mp3s(musicdir):
     print("Found {0} song(s)!".format(len(songs)))
 
     return songs
+
 
 
 def main():
@@ -181,6 +226,7 @@ def main():
             #     t.join()
         except (KeyboardInterrupt, SystemExit):
             print "main --> keyboardInterrupt"
+            close_threads = True
             break
             
         except Exception as e:

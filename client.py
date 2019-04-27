@@ -9,6 +9,9 @@ import sys
 import threading
 from time import sleep
 
+HEADER_LEN = 20 # (10,6,4)
+RECV_BUFFER = 64 + HEADER_LEN
+
 # The Mad audio library we're using expects to be given a file object, but
 # we're not dealing with files, we're reading audio data over the network.  We
 # use this object to trick it.  All it really wants from the file object is the
@@ -34,13 +37,28 @@ class mywrapper(object):
 # the wrapper with synchronization, since the other thread is using
 # it too!
 def recv_thread_func(wrap, cond_filled, sock):
+    
     while True:
-        # TODO
-        # pase the socket message
-        # get the body (lets call it body_byte)
-        # wrap.data = wrap.data + body_byte
+        cond_filled.acquire()
+        print  "recv_thread_func " + str(sock.getsockname()[1]) + " listening ... "
+        message_received = sock.recv(RECV_BUFFER)
+        message_format = '10sI4s' + str(RECV_BUFFER-HEADER_LEN) + 's'
+        print  "message_format=" + message_format
+        message_decoded = struct.unpack(message_format, message_received)
 
-        pass
+
+        
+        sys.stderr.write(str(message_decoded))
+        
+        # if ("this is the song data"):
+        #     wrap.data = wrap.data + body_byte (add data to wrapper)
+        #     cond_filled.notify()
+        # else:
+
+
+        
+        cond_filled.release() 
+       
 
 
 # If there is song data stored in the wrapper object, play it!
@@ -49,6 +67,7 @@ def recv_thread_func(wrap, cond_filled, sock):
 # using it too!
 def play_thread_func(wrap, cond_filled, dev):
     while True:
+
         """
         TODO
         example usage of dev and wrap (see mp3-example.py for a full example):
