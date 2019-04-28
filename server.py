@@ -7,13 +7,12 @@ import sys
 from threading import Lock, Thread
 import time 
 
-songs_list = [] # map from id to the filename for the song
+songs_dic = {} # map from id to the filename for the song
 QUEUE_LENGTH = 10
 RECV_CMD_BUFFER = 4096
-SEND_BUFFER = 2
+SEND_BUFFER = 4096
 accepted_methods = ['LIST', 'PLAY', 'STOP', 'EXIT']
 
-close_threads = False
 # per-client struct
 class Client:
     def __init__(self):
@@ -30,12 +29,12 @@ def print_except_msg():
     fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
     print(exc_type, fname, exc_tb.tb_lineno)    
 
-def create_list_msg(songs_list):
+def create_list_msg(songs_dic):
     content_body = ""
-    for i in range(len(songs_list)):
-        song_tuple = (i+1, songs_list[i]['name'])
+    for i, data in songs_dic.items():
+        song_tuple = (i, songs_dic[i]['name'])
         content_body = content_body + str(song_tuple)
-        if (i < len(songs_list)-1):
+        if (i < len(songs_dic)-1):
             content_body = content_body + ","
 
     return content_body
@@ -47,11 +46,10 @@ def send_response(client, client_socket, status, content_body):
     # header
     header_message_length = '10sI4s'
     message_length = header_message_length + str(SEND_BUFFER) + "s"
-    # data_to_send = struct.pack(header_message_length,)
-    # client_socket.send(data_to_send)
 
     # send body
     if (len(content_body) <= SEND_BUFFER):
+        print "in if clause:        message_length=" + message_length
         data_to_send = struct.pack(message_length, client.protocol, status, client.method, content_body)
         client_socket.send(data_to_send)
     else:
@@ -61,6 +59,7 @@ def send_response(client, client_socket, status, content_body):
             content_body = content_body[SEND_BUFFER:]
             remaining_bytes = len(content_body)
             message_length = header_message_length + str(SEND_BUFFER) + "s"
+            print "in while loop:        message_length=" + message_length
             data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
             client_socket.send(data_to_send) 
 
@@ -69,6 +68,7 @@ def send_response(client, client_socket, status, content_body):
             elif (remaining_bytes < SEND_BUFFER):
                 partial_content = content_body
                 message_length = header_message_length + str(SEND_BUFFER) + "s"
+                print "in elif clause:       message_length=" + message_length
                 data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
                 client_socket.send(data_to_send)  
                 break               
@@ -79,7 +79,7 @@ def send_response(client, client_socket, status, content_body):
 # be passed to this thread through the associated Client object.  Make sure you
 # use locks or similar synchronization tools to ensure that the two threads play
 # nice with one another!
-def client_write(client, client_socket, client_port, songs_list, musicdir):
+def client_write(client, client_socket, client_port, songs_dic, musicdir):
     while True:
         client.lock.acquire()
         try:
@@ -88,35 +88,36 @@ def client_write(client, client_socket, client_port, songs_list, musicdir):
                 content_body = ""
                 if (client.method == 'LIST'):
                     print ("from " + str(client_port)+ ":  it is LIST")
-                    content_body = create_list_msg(songs_list)
+                    content_body = create_list_msg(songs_dic)
                     
                 elif (client.method == 'PLAY'):
                     print ("from " + str(client_port)+ ":  it is PLAY --> song_id: " + str(client.song_id))
-                    found_song_filename =  songs_list[client.song_id-1]
+                    found_song_filename =  songs_dic[client.song_id]['name']
                     content_body = open(musicdir + "/" + found_song_filename, 'r').read()
                     
                 elif (client.method == 'STOP'):
                     print ("from " + str(client_port)+ ":  it is STOP")
-
+                    content_body = 'Stop requested'
                 elif (client.method == 'EXIT'):
                     print ("from " + str(client_port)+ ":  it is EXIT")
                     break
-
+                
                 send_response(client, client_socket, 200, content_body)
-
+                
         except (KeyboardInterrupt, SystemExit):
             print "client_write --> keyboardInterrupt"
             break
-        # except IOError as e:
-        #     print "client_write --> IOError"
-        #     print_except_msg()
-        #     close_threads = True
-        #     #break
+        except KeyError as e:
+            print "client_write --> KeyError (file requrested was not found)"
+            print str(e)
+            print_except_msg()
+            send_response(client, client_socket, 404, '404: File not found')
+            #break
         except Exception as e:
             print "client_write --> any exception"
             print str(e)
             print_except_msg()
-            send_response(client, client_socket, 500, 'Server Error')
+            send_response(client, client_socket, 500, '500: Server Error')
 
         client.lock.release()
         client.method = ''
@@ -171,19 +172,21 @@ def client_read(client, client_socket, client_port):
 
 def get_mp3s(musicdir):
     print("Reading music files...")
-    songs = []
+    songs = {}
+    counter = 1
     for filename in os.listdir(musicdir):
         if not filename.endswith(".mp3"):
             continue
         else:
             filesize = os.path.getsize(musicdir + "/" + filename)
             data = {'name': filename, 'size': filesize}
-            songs.append(data)
+            songs[counter] = data
+            counter = counter + 1
             
         # TODO: Store song metadata for future use.  You may also want to build
         # the song list once and send to any clients that need it.
 
-    print("Found {0} song(s)!".format(len(songs)))
+    print("Found {0} song(s)!".format(len(songs.keys())))
 
     return songs
 
@@ -196,8 +199,8 @@ def main():
         sys.exit("Directory '{0}' does not exist".format(sys.argv[2]))
 
     port = int(sys.argv[1])
-    songs_list = get_mp3s(sys.argv[2])
-    print songs_list
+    songs_dic = get_mp3s(sys.argv[2])
+    print songs_dic
     threads = []
 
     # TODO: create a socket and accept incoming connections
@@ -231,7 +234,7 @@ def main():
             #     t.join()
         except (KeyboardInterrupt, SystemExit):
             print "main --> keyboardInterrupt"
-            
+
             break
         # except IOError as e:
         #     print "main --> IOError"

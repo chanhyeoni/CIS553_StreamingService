@@ -10,7 +10,7 @@ import threading
 from time import sleep
 
 HEADER_LEN = 20 # (10,6,4)
-RECV_BUFFER = 2 + HEADER_LEN
+RECV_BUFFER = 4096 + HEADER_LEN
 
 # The Mad audio library we're using expects to be given a file object, but
 # we're not dealing with files, we're reading audio data over the network.  We
@@ -53,13 +53,26 @@ def recv_thread_func(wrap, cond_filled, sock):
         wrap.status = message_decoded[1]
         wrap.method = message_decoded[2]
 
-
         if (wrap.method == 'EXIT'):
             print "from recv_thread_func: EXIT!"
             break
-        else:
+        elif (wrap.method == 'LIST'):
             sys.stderr.write(message_decoded[3])
+        elif (wrap.method == 'PLAY'):
+            if (wrap.status == 404 or wrap.status == 500):
+                sys.stderr.write(message_decoded[3])
+            elif (wrap.status == 200):
+                # TODO
+                # if a user request for a different song, what should we do?
+                # maybe in response message, we need to send a flag variable saying that this is a different song
 
+                # make data available by calling the code below
+                wrap.data = wrap.data + message_decoded[3] #(add data to wrapper)
+                wrap.new_data_added = True
+                cond_filled.notify()
+        elif (wrap.method == 'STOP'):
+            wrap.data = ""
+            sys.stderr.write(message_decoded[3])
 
         
         
@@ -80,17 +93,28 @@ def recv_thread_func(wrap, cond_filled, sock):
 # using it too!
 def play_thread_func(wrap, cond_filled, dev):
     while True:
-        if (wrap.method == 'EXIT'):
-            print "from recv_thread_func: EXIT!"
-            break
+        cond_filled.acquire()
+        
+        while (not wrap.new_data_added):
+            cond_filled.wait()
+
+        # play the song
+        print "play song!"
+
+        #TODO
+        while True:
+            buf = wrap.mf.read(RECV_BUFFER-HEADER_LEN)
+            # example usage of dev and wrap (see mp3-example.py for a full example):
+            if buf is None:  # eof
+                break
+            dev.play(buffer(buf), len(buf))
+        
+        wrap.new_data_added = False
+
+        cond_filled.release() 
+
         # print ("I got the song!")
-        """
-        TODO
-        example usage of dev and wrap (see mp3-example.py for a full example):
-        buf = wrap.mf.read(size)
-        dev.play(buffer(buf), len(buf))
-        """
-        pass
+
 
 
 def main():
