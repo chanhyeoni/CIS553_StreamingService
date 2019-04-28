@@ -225,7 +225,7 @@ def main():
             threads.append(t1)
             # t1.join()
             time.sleep(1)
-            t2 = Thread(target=client_write, args=(client, conn, addr[1], songs_list, sys.argv[2]))
+            t2 = Thread(target=client_write, args=(client, conn, addr[1], songs_dic, sys.argv[2]))
             t2.start()
             threads.append(t2)
             # t2.join()

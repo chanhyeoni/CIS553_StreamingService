@@ -102,12 +102,14 @@ def play_thread_func(wrap, cond_filled, dev):
         print "play song!"
 
         #TODO
-        while True:
-            buf = wrap.mf.read(RECV_BUFFER-HEADER_LEN)
-            # example usage of dev and wrap (see mp3-example.py for a full example):
-            if buf is None:  # eof
-                break
-            dev.play(buffer(buf), len(buf))
+        # while True:
+        #     buf = wrap.mf.read(RECV_BUFFER-HEADER_LEN)
+        #     if (wrap.method=='STOP'):
+        #            buf = None
+        #     # example usage of dev and wrap (see mp3-example.py for a full example):
+        #     if buf is None:  # eof
+        #         break
+        #     dev.play(buffer(buf), len(buf))
         
         wrap.new_data_added = False
 
