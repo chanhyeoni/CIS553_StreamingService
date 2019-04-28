@@ -22,6 +22,9 @@ class mywrapper(object):
     def __init__(self):
         self.mf = None
         self.data = ""
+        self.protocol = ""
+        self.status = -1
+        self.method = ""
 
     # When it asks to read a specific size, give it that many bytes, and
     # update our remaining data.
@@ -46,13 +49,16 @@ def recv_thread_func(wrap, cond_filled, sock):
         message_decoded = struct.unpack(message_format, message_received)
         # sys.stderr.write(str(message_decoded) + "\n")
 
-        protocol = message_decoded[0]
-        status = message_decoded[1]
-        method = message_decoded[2]
+        wrap.protocol = message_decoded[0]
+        wrap.status = message_decoded[1]
+        wrap.method = message_decoded[2]
 
-        # partial read
-        
-        sys.stderr.write(message_decoded[3])
+
+        if (wrap.method == 'EXIT'):
+            print "from recv_thread_func: EXIT!"
+            break
+        else:
+            sys.stderr.write(message_decoded[3])
 
 
         
@@ -74,6 +80,9 @@ def recv_thread_func(wrap, cond_filled, sock):
 # using it too!
 def play_thread_func(wrap, cond_filled, dev):
     while True:
+        if (wrap.method == 'EXIT'):
+            print "from recv_thread_func: EXIT!"
+            break
         # print ("I got the song!")
         """
         TODO
@@ -127,7 +136,7 @@ def main():
     protocol = 'MyProtocol'
     data_to_send = None
     while True:
-        try:
+        # try:
             line = raw_input('>> ')
 
             if ' ' in line:
@@ -156,26 +165,23 @@ def main():
                 method = 'STOP'
                 data_to_send = struct.pack('4sI10s', method, 0, protocol)
                 sock.send(data_to_send)
-            elif cmd in ['e', 'exit', 'E', 'EXIT']:
-                print 'The user asked for exit (killing the client).'
-                method = 'EXIT'
-                data_to_send = struct.pack('4sI10s', method, 0, protocol)
-                sock.send(data_to_send)
-                # write the command to server socket
-            else:
-                continue
-
+            # elif cmd in ['e', 'exit', 'E', 'EXIT']:
+            #     print 'The user asked for exit (killing the client).'
+            #     method = 'EXIT'
+            #     data_to_send = struct.pack('4sI10s', method, 0, protocol)
+            #     sock.send(data_to_send)
 
             if cmd in ['quit', 'q', 'exit']:
                 sys.exit(0)
 
-        except (KeyboardInterrupt, SystemExit):
-            print "main --> keyboardInterrupt"
-            print 'The user asked for exit (killing the client).'
-            method = 'EXIT'
-            data_to_send = struct.pack('4sI10s', method, 0, protocol)
-            sock.send(data_to_send)
-            sys.exit(0)
+        # except (KeyboardInterrupt, SystemExit):
+        #     print "main --> keyboardInterrupt"
+        #     print 'The user asked for exit (killing the client).'
+        #     method = 'EXIT'
+        #     data_to_send = struct.pack('4sI10s', method, 0, protocol)
+        #     sock.send(data_to_send)
+        #     sys.exit(0)
+        #     break
 
 
 

@@ -9,11 +9,11 @@ import time
 
 songs_list = [] # map from id to the filename for the song
 QUEUE_LENGTH = 10
-RECV_CMD_BUFFER = 64
+RECV_CMD_BUFFER = 4096
 SEND_BUFFER = 2
-close_threads = False
 accepted_methods = ['LIST', 'PLAY', 'STOP', 'EXIT']
 
+close_threads = False
 # per-client struct
 class Client:
     def __init__(self):
@@ -79,61 +79,52 @@ def send_response(client, client_socket, status, content_body):
 # be passed to this thread through the associated Client object.  Make sure you
 # use locks or similar synchronization tools to ensure that the two threads play
 # nice with one another!
-def client_write(client, client_socket, client_port, songs_list):
-    global close_threads
-    while not close_threads:
+def client_write(client, client_socket, client_port, songs_list, musicdir):
+    while True:
         client.lock.acquire()
         try:
+            
             if (client.method in accepted_methods):
                 content_body = ""
                 if (client.method == 'LIST'):
-                    print ("it is LIST")
+                    print ("from " + str(client_port)+ ":  it is LIST")
                     content_body = create_list_msg(songs_list)
+                    
                 elif (client.method == 'PLAY'):
-                    print ("it is PLAY --> song_id: " + str(client.song_id))
+                    print ("from " + str(client_port)+ ":  it is PLAY --> song_id: " + str(client.song_id))
                     found_song_filename =  songs_list[client.song_id-1]
-                    content_body = open(found_song_filename, 'r').read()
+                    content_body = open(musicdir + "/" + found_song_filename, 'r').read()
+                    
                 elif (client.method == 'STOP'):
-                    print ("it is STOP")
+                    print ("from " + str(client_port)+ ":  it is STOP")
 
                 elif (client.method == 'EXIT'):
-                    print ("it is EXIT")
-                    close_threads = True
+                    print ("from " + str(client_port)+ ":  it is EXIT")
                     break
-                # else:
-                #     print ("client_write listening...")
-                
-                send_response(client, client_socket, 200, content_body)
-                
 
+                send_response(client, client_socket, 200, content_body)
 
         except (KeyboardInterrupt, SystemExit):
             print "client_write --> keyboardInterrupt"
-            close_threads = True
-            #break
-        except IOError as e:
-            print "client_write --> IOError"
-            print_except_msg()
-            close_threads = True
-            #break
+            break
+        # except IOError as e:
+        #     print "client_write --> IOError"
+        #     print_except_msg()
+        #     close_threads = True
+        #     #break
         except Exception as e:
             print "client_write --> any exception"
+            print str(e)
             print_except_msg()
-            close_threads = True
-            # close_threads = True
-            # create 500 response
-            # break
-            # message = 'Server Error'
-            # message_format = '10sI' + str(len(message)) + 's'
-            # data_to_send = struct.pack(message_format, client.protocol, 500, message)
-            # client_socket.send(data_to_send) 
+            send_response(client, client_socket, 500, 'Server Error')
 
-            # close_threads = True
-            # break
-
-        client.method = ''
         client.lock.release()
+        client.method = ''
+        
 
+    print "client_write " + str(client_port) + " closed "
+
+    return 0
 
     
 
@@ -142,44 +133,41 @@ def client_write(client, client_socket, client_port, songs_list):
 # TODO: Thread that receives commands from the client.  All recv() calls should
 # be contained in this function.
 def client_read(client, client_socket, client_port):
-    global close_threads
-    while not close_threads:
-        
-        try:
 
-            print "client_read " + str(client_port) + " listening..."
+    print "client_read " + str(client_port) + " listening..."
+    while True: 
+        try:
             message_received = client_socket.recv(RECV_CMD_BUFFER)
-        
-            message_decoded = struct.unpack('4sI10s', message_received)
-            print (message_decoded)
-            client.lock.acquire()
-            client.method = message_decoded[0]
-            client.song_id = message_decoded[1]
-            client.protocol = message_decoded[2]
-            client.lock.release()
-            # if (message_decoded[0] == 'EXIT'):
-            #     print "client_read --> It's EXIT"
-            #     sys.exit(1)
-            #     break;
+
+            if (len(message_received) > 0):
+                message_decoded = struct.unpack('4sI10s', message_received)
+                client.lock.acquire()
+                client.method = message_decoded[0]
+                client.song_id = message_decoded[1]
+                client.protocol = message_decoded[2]
+                client.lock.release()
+            else:
+                print "message received is zero; if it is zero, it means the client is diconnected"
+                client.method = 'EXIT'
+                break
+
         except (KeyboardInterrupt, SystemExit):
             print "client_read --> keyboardInterrupt"
-            close_threads = True
-            break
-        except IOError as e:
-            print "client_read --> IOError"
-            print_except_msg()
-            close_threads = True
             break
         except Exception as e:
             print "client_read --> any exception"
             print_except_msg()
-            close_threads = True
-            break
+            print str(e)
             # message = 'Server Error'
             # message_format = '10sI' + str(len(message)) + 's'
             # data_to_send = struct.pack(message_format, client.protocol, 500, message)
             # client_socket.send(data_to_send) 
+            # break
 
+
+    print "client_read " + str(client_port) + " closed "
+
+    return 0
 
 def get_mp3s(musicdir):
     print("Reading music files...")
@@ -234,7 +222,7 @@ def main():
             threads.append(t1)
             # t1.join()
             time.sleep(1)
-            t2 = Thread(target=client_write, args=(client, conn, addr[1], songs_list))
+            t2 = Thread(target=client_write, args=(client, conn, addr[1], songs_list, sys.argv[2]))
             t2.start()
             threads.append(t2)
             # t2.join()
@@ -243,24 +231,22 @@ def main():
             #     t.join()
         except (KeyboardInterrupt, SystemExit):
             print "main --> keyboardInterrupt"
-            close_threads = True
+            
             break
-        except IOError as e:
-            print "main --> IOError"
-            print_except_msg()
-            close_threads = True
-            break
-        except Exception as e:
-            print "main --> any exception"
-            print_except_msg()  
-            close_threads = True
-            # close_threads = True      
-            break
-
-
-
+        # except IOError as e:
+        #     print "main --> IOError"
+        #     print_except_msg()
+        #     close_threads = True
+        #     break
+        # except Exception as e:
+        #     print "main --> any exception"
+        #     print_except_msg()  
+        #     close_threads = True     
+        #     break
 
     s.close()
+
+    print "server closed"
 
 
 
