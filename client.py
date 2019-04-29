@@ -9,8 +9,9 @@ import sys
 import threading
 from time import sleep
 
-HEADER_LEN = 20 # (10,6,4)
+HEADER_LEN = 24 # (10,6,4,4)
 RECV_BUFFER = 4096 + HEADER_LEN
+PLAY_BUFFER = 32
 
 # The Mad audio library we're using expects to be given a file object, but
 # we're not dealing with files, we're reading audio data over the network.  We
@@ -18,6 +19,7 @@ RECV_BUFFER = 4096 + HEADER_LEN
 # read() method, so we create this wrapper with a read() method for it to
 # call, and it won't know the difference.
 # NOTE: You probably don't need to modify this class.
+# so we use mywrapper to wrap music data into file!
 class mywrapper(object):
     def __init__(self):
         self.mf = None
@@ -25,6 +27,9 @@ class mywrapper(object):
         self.protocol = ""
         self.status = -1
         self.method = ""
+        self.song_id = -1 # the id of the song currently playing
+        self.new_data_added = False
+        self.stop_requested = False
 
     # When it asks to read a specific size, give it that many bytes, and
     # update our remaining data.
@@ -45,34 +50,52 @@ def recv_thread_func(wrap, cond_filled, sock):
         cond_filled.acquire()
         # print  "recv_thread_func " + str(sock.getsockname()[1]) + " listening ... "
         message_received = sock.recv(RECV_BUFFER)
-        message_format = '10sI4s' + str(RECV_BUFFER-HEADER_LEN) + 's'
-        message_decoded = struct.unpack(message_format, message_received)
+        # print ("message_format --> " + str(len(message_received)))
+        message_length = len(message_received)
+        message_format = ''
+        if (message_length < (RECV_BUFFER)):
+            # print "HELLO"
+            message_format = '10sI4sI' + str(message_length-HEADER_LEN) + 's'
+        else:
+            message_format = '10sI4sI' + str(RECV_BUFFER-HEADER_LEN) + 's'
+
+        # message_format = '10sI4sI' + str(RECV_BUFFER-HEADER_LEN) + 's'
+
+        message_decoded = struct.unpack(message_format, message_received)      
         # sys.stderr.write(str(message_decoded) + "\n")
 
         wrap.protocol = message_decoded[0]
         wrap.status = message_decoded[1]
         wrap.method = message_decoded[2]
+        requested_song = message_decoded[3]
+        # message_size = message_decoded[4]
 
         if (wrap.method == 'EXIT'):
             print "from recv_thread_func: EXIT!"
             break
         elif (wrap.method == 'LIST'):
-            sys.stderr.write(message_decoded[3])
+            sys.stderr.write(message_decoded[4])
         elif (wrap.method == 'PLAY'):
             if (wrap.status == 404 or wrap.status == 500):
-                sys.stderr.write(message_decoded[3])
+                sys.stderr.write(message_decoded[4])
+
             elif (wrap.status == 200):
                 # TODO
-                # if a user request for a different song, what should we do?
-                # maybe in response message, we need to send a flag variable saying that this is a different song
+                if (wrap.song_id != requested_song):
+                    wrap.data = ''
+                    wrap.song_id = requested_song
+                elif (wrap.song_id == requested_song):
+                    sys.stderr.write("the song " + wrap.song_id + " is already playing")
+                    pass
 
-                # make data available by calling the code below
-                wrap.data = wrap.data + message_decoded[3] #(add data to wrapper)
+                wrap.data = wrap.data + message_decoded[4] #(add data to wrapper)
                 wrap.new_data_added = True
                 cond_filled.notify()
         elif (wrap.method == 'STOP'):
             wrap.data = ""
-            sys.stderr.write(message_decoded[3])
+            sys.stderr.write(message_decoded[4])
+            # wrap.stop_requested = True
+            # cond_filled.notify()
 
         
         
@@ -82,7 +105,7 @@ def recv_thread_func(wrap, cond_filled, sock):
         #     cond_filled.notify()
 
 
-        
+        sys.stderr.flush()
         cond_filled.release() 
        
 
@@ -95,11 +118,30 @@ def play_thread_func(wrap, cond_filled, dev):
     while True:
         cond_filled.acquire()
         
-        while (not wrap.new_data_added):
-            cond_filled.wait()
-
-        # play the song
+        #while (not wrap.new_data_added):
+        #    cond_filled.wait()
+        while True:
+            if wrap.new_data_added:
+                break
+            cond_filled.wait() # sleep until new data added
+        
+        # play the song, play just a lit bit each time!
+        cond_filled.release() 
         print "play song!"
+
+        wrap.mf = mad.MadFile(wrap)
+
+        # Play the song, play what we have now.
+        while True:
+            buf = wrap.mf.read(PLAY_BUFFER)
+            #print("buf is", buf)
+            if buf is None:  # eof
+                print "buf is None"
+                break
+            if wrap.method == 'STOP':
+                break
+            #print("length of buf is", len(buf))
+            dev.play(buffer(buf), len(buf))
 
         #TODO
         # while True:
@@ -112,8 +154,9 @@ def play_thread_func(wrap, cond_filled, dev):
         #     dev.play(buffer(buf), len(buf))
         
         wrap.new_data_added = False
+        # wrap.stop_requested = False
 
-        cond_filled.release() 
+        
 
         # print ("I got the song!")
 

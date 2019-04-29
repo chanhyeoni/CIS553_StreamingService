@@ -44,32 +44,35 @@ def create_list_msg(songs_dic):
 def send_response(client, client_socket, status, content_body):
 
     # header
-    header_message_length = '10sI4s'
+    header_message_length = '10sI4sI'
     message_length = header_message_length + str(SEND_BUFFER) + "s"
+
+    # print "message size=" + str(struct.calcsize(message_length))
 
     # send body
     if (len(content_body) <= SEND_BUFFER):
-        print "in if clause:        message_length=" + message_length
-        data_to_send = struct.pack(message_length, client.protocol, status, client.method, content_body)
+        data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, content_body)
         client_socket.send(data_to_send)
     else:
         # partial send
+        
         while True:
             partial_content = content_body[:SEND_BUFFER]
             content_body = content_body[SEND_BUFFER:]
             remaining_bytes = len(content_body)
             message_length = header_message_length + str(SEND_BUFFER) + "s"
-            print "in while loop:        message_length=" + message_length
-            data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
+            data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
             client_socket.send(data_to_send) 
+            # print ("data sent!")
+            # in PLAY, I have checked, data_to_send is different, which means we did send something
 
             if (remaining_bytes == 0):
                 break
             elif (remaining_bytes < SEND_BUFFER):
+                print "this is the last chunk"
                 partial_content = content_body
                 message_length = header_message_length + str(SEND_BUFFER) + "s"
-                print "in elif clause:       message_length=" + message_length
-                data_to_send = struct.pack(message_length, client.protocol, status, client.method, partial_content)
+                data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
                 client_socket.send(data_to_send)  
                 break               
 
@@ -159,11 +162,7 @@ def client_read(client, client_socket, client_port):
             print "client_read --> any exception"
             print_except_msg()
             print str(e)
-            # message = 'Server Error'
-            # message_format = '10sI' + str(len(message)) + 's'
-            # data_to_send = struct.pack(message_format, client.protocol, 500, message)
-            # client_socket.send(data_to_send) 
-            # break
+
 
 
     print "client_read " + str(client_port) + " closed "
