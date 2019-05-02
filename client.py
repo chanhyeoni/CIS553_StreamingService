@@ -11,7 +11,7 @@ from time import sleep
 
 HEADER_LEN = 24 # (10,6,4,4)
 RECV_BUFFER = 4096 + HEADER_LEN
-PLAY_BUFFER = 32
+PLAY_BUFFER = 1028
 
 # The Mad audio library we're using expects to be given a file object, but
 # we're not dealing with files, we're reading audio data over the network.  We
@@ -29,7 +29,7 @@ class mywrapper(object):
         self.method = ""
         self.song_id = -1 # the id of the song currently playing
         self.new_data_added = False
-        self.stop_requested = False
+        # self.stop_requested = False
 
     # When it asks to read a specific size, give it that many bytes, and
     # update our remaining data.
@@ -47,7 +47,7 @@ class mywrapper(object):
 def recv_thread_func(wrap, cond_filled, sock):
     
     while True:
-        cond_filled.acquire()
+        
         # print  "recv_thread_func " + str(sock.getsockname()[1]) + " listening ... "
         message_received = sock.recv(RECV_BUFFER)
         # print ("message_format --> " + str(len(message_received)))
@@ -58,9 +58,7 @@ def recv_thread_func(wrap, cond_filled, sock):
             message_format = '10sI4sI' + str(message_length-HEADER_LEN) + 's'
         else:
             message_format = '10sI4sI' + str(RECV_BUFFER-HEADER_LEN) + 's'
-
         # message_format = '10sI4sI' + str(RECV_BUFFER-HEADER_LEN) + 's'
-
         message_decoded = struct.unpack(message_format, message_received)      
         # sys.stderr.write(str(message_decoded) + "\n")
 
@@ -78,35 +76,25 @@ def recv_thread_func(wrap, cond_filled, sock):
         elif (wrap.method == 'PLAY'):
             if (wrap.status == 404 or wrap.status == 500):
                 sys.stderr.write(message_decoded[4])
-
             elif (wrap.status == 200):
                 # TODO
+                cond_filled.acquire()
                 if (wrap.song_id != requested_song):
                     wrap.data = ''
                     wrap.song_id = requested_song
-                elif (wrap.song_id == requested_song):
-                    sys.stderr.write("the song " + wrap.song_id + " is already playing")
-                    pass
 
+                # print ("data added")
                 wrap.data = wrap.data + message_decoded[4] #(add data to wrapper)
                 wrap.new_data_added = True
                 cond_filled.notify()
+
+                cond_filled.release()
         elif (wrap.method == 'STOP'):
             wrap.data = ""
-            sys.stderr.write(message_decoded[4])
+            # sys.stderr.write(message_decoded[4])
             # wrap.stop_requested = True
-            # cond_filled.notify()
-
-        
-        
-        
-        # if (message_decoded):
-        #     #wrap.data = wrap.data + body_byte (add data to wrapper)
-        #     cond_filled.notify()
-
-
         sys.stderr.flush()
-        cond_filled.release() 
+         
        
 
 
@@ -115,50 +103,46 @@ def recv_thread_func(wrap, cond_filled, sock):
 # to the wrapper with synchronization, since the other thread is
 # using it too!
 def play_thread_func(wrap, cond_filled, dev):
+    currently_playing_song = wrap.song_id
     while True:
+        # print "it is stop in while loop 1x"
         cond_filled.acquire()
         
-        #while (not wrap.new_data_added):
-        #    cond_filled.wait()
         while True:
+            # print "it is stop in while loop 2"
             if wrap.new_data_added:
+                print "new data added!"
                 break
+            print "wait!"
             cond_filled.wait() # sleep until new data added
-        
         # play the song, play just a lit bit each time!
-        cond_filled.release() 
-        print "play song!"
+        wrap.new_data_added = False
+        # currently_playing_song = wrap.song_id
+        cond_filled.release()
+        
 
         wrap.mf = mad.MadFile(wrap)
 
         # Play the song, play what we have now.
         while True:
-            buf = wrap.mf.read(PLAY_BUFFER)
-            #print("buf is", buf)
+            buf = wrap.mf.read()
             if buf is None:  # eof
                 print "buf is None"
                 break
             if wrap.method == 'STOP':
+                print "STOP!"
                 break
-            #print("length of buf is", len(buf))
+            # if wrap.song_id != currently_playing_song:
+            #     print "Play a different song!"
+            #     buf = ''
+            #     currently_playing_song = wrap.song_id
+
             dev.play(buffer(buf), len(buf))
 
-        #TODO
-        # while True:
-        #     buf = wrap.mf.read(RECV_BUFFER-HEADER_LEN)
-        #     if (wrap.method=='STOP'):
-        #            buf = None
-        #     # example usage of dev and wrap (see mp3-example.py for a full example):
-        #     if buf is None:  # eof
-        #         break
-        #     dev.play(buffer(buf), len(buf))
         
-        wrap.new_data_added = False
-        # wrap.stop_requested = False
-
+        
         
 
-        # print ("I got the song!")
 
 
 
@@ -234,25 +218,11 @@ def main():
                 method = 'STOP'
                 data_to_send = struct.pack('4sI10s', method, 0, protocol)
                 sock.send(data_to_send)
-            # elif cmd in ['e', 'exit', 'E', 'EXIT']:
-            #     print 'The user asked for exit (killing the client).'
-            #     method = 'EXIT'
-            #     data_to_send = struct.pack('4sI10s', method, 0, protocol)
-            #     sock.send(data_to_send)
+            # else:
+            #     print "command not found"
 
             if cmd in ['quit', 'q', 'exit']:
                 sys.exit(0)
-
-        # except (KeyboardInterrupt, SystemExit):
-        #     print "main --> keyboardInterrupt"
-        #     print 'The user asked for exit (killing the client).'
-        #     method = 'EXIT'
-        #     data_to_send = struct.pack('4sI10s', method, 0, protocol)
-        #     sock.send(data_to_send)
-        #     sys.exit(0)
-        #     break
-
-
 
     sock.close()
 

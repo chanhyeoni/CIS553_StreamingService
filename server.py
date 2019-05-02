@@ -55,26 +55,42 @@ def send_response(client, client_socket, status, content_body):
         client_socket.send(data_to_send)
     else:
         # partial send
-        
-        while True:
-            partial_content = content_body[:SEND_BUFFER]
-            content_body = content_body[SEND_BUFFER:]
-            remaining_bytes = len(content_body)
-            message_length = header_message_length + str(SEND_BUFFER) + "s"
-            data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
-            client_socket.send(data_to_send) 
-            # print ("data sent!")
-            # in PLAY, I have checked, data_to_send is different, which means we did send something
+        body_size = len(content_body)
+        remaining_bytes = body_size
 
-            if (remaining_bytes == 0):
-                break
-            elif (remaining_bytes < SEND_BUFFER):
+        while (remaining_bytes > 0):
+            if (remaining_bytes < SEND_BUFFER):
                 print "this is the last chunk"
                 partial_content = content_body
-                message_length = header_message_length + str(SEND_BUFFER) + "s"
-                data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
-                client_socket.send(data_to_send)  
-                break               
+            else:
+                partial_content = content_body[:SEND_BUFFER]
+            
+            message_length = header_message_length + str(SEND_BUFFER) + "s"
+            data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
+            client_socket.send(data_to_send)
+
+            content_body = content_body[SEND_BUFFER:]
+            remaining_bytes = len(content_body)            
+
+        # while True:
+        #     partial_content = content_body[:SEND_BUFFER]
+        #     content_body = content_body[SEND_BUFFER:]
+        #     remaining_bytes = len(content_body)
+        #     message_length = header_message_length + str(SEND_BUFFER) + "s"
+        #     data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
+        #     client_socket.send(data_to_send) 
+        #     # print ("data sent!")
+        #     # in PLAY, I have checked, data_to_send is different, which means we did send something
+
+        #     if (remaining_bytes == 0):
+        #         break
+        #     elif (remaining_bytes < SEND_BUFFER):
+        #         print "this is the last chunk"
+        #         partial_content = content_body
+        #         message_length = header_message_length + str(SEND_BUFFER) + "s"
+        #         data_to_send = struct.pack(message_length, client.protocol, status, client.method, client.song_id, partial_content)
+        #         client_socket.send(data_to_send)  
+        #         break               
 
 
 # TODO: Thread that sends music and lists to the client.  All send() calls
@@ -115,17 +131,16 @@ def client_write(client, client_socket, client_port, songs_dic, musicdir):
             print str(e)
             print_except_msg()
             send_response(client, client_socket, 404, '404: File not found')
-            #break
         except Exception as e:
             print "client_write --> any exception"
             print str(e)
             print_except_msg()
             send_response(client, client_socket, 500, '500: Server Error')
 
-        client.lock.release()
         client.method = ''
+        client.lock.release()
         
-
+        
     print "client_write " + str(client_port) + " closed "
 
     return 0
@@ -162,8 +177,6 @@ def client_read(client, client_socket, client_port):
             print "client_read --> any exception"
             print_except_msg()
             print str(e)
-
-
 
     print "client_read " + str(client_port) + " closed "
 
@@ -215,36 +228,18 @@ def main():
         try:
             conn, addr = s.accept()
             client = Client()
-            # t = Thread(target=on_new_client,args=(conn,addr,client))
-            # t.start()
-            # message_received = conn.recv(SEND_BUFFER)
 
             t1 = Thread(target=client_read, args=(client, conn, addr[1]))
             t1.start()
             threads.append(t1)
-            # t1.join()
             time.sleep(1)
             t2 = Thread(target=client_write, args=(client, conn, addr[1], songs_dic, sys.argv[2]))
             t2.start()
             threads.append(t2)
-            # t2.join()
-
-            # for t in threads:
-            #     t.join()
         except (KeyboardInterrupt, SystemExit):
             print "main --> keyboardInterrupt"
-
             break
-        # except IOError as e:
-        #     print "main --> IOError"
-        #     print_except_msg()
-        #     close_threads = True
-        #     break
-        # except Exception as e:
-        #     print "main --> any exception"
-        #     print_except_msg()  
-        #     close_threads = True     
-        #     break
+
 
     s.close()
 
