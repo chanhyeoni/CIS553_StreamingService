@@ -81,6 +81,7 @@ def recv_thread_func(wrap, cond_filled, sock):
                 cond_filled.acquire()
                 if (wrap.song_id != requested_song):
                     wrap.data = ''
+                    wrap.mf = mad.MadFile(wrap)
                     wrap.song_id = requested_song
 
                 # print ("data added")
@@ -111,7 +112,7 @@ def play_thread_func(wrap, cond_filled, dev):
         while True:
             # print "it is stop in while loop 2"
             if wrap.new_data_added:
-                print "new data added!"
+                #print "new data added!"
                 break
             print "wait!"
             cond_filled.wait() # sleep until new data added
@@ -120,14 +121,13 @@ def play_thread_func(wrap, cond_filled, dev):
         # currently_playing_song = wrap.song_id
         cond_filled.release()
         
-
         wrap.mf = mad.MadFile(wrap)
 
         # Play the song, play what we have now.
         while True:
             buf = wrap.mf.read()
             if buf is None:  # eof
-                print "buf is None"
+                #print "buf is None"
                 break
             if wrap.method == 'STOP':
                 print "STOP!"
@@ -136,12 +136,9 @@ def play_thread_func(wrap, cond_filled, dev):
             #     print "Play a different song!"
             #     buf = ''
             #     currently_playing_song = wrap.song_id
+            # wrap.mf = mad.MadFile(wrap)
 
             dev.play(buffer(buf), len(buf))
-
-        
-        
-        
 
 
 
@@ -221,8 +218,11 @@ def main():
             # else:
             #     print "command not found"
 
-            if cmd in ['quit', 'q', 'exit']:
+            elif cmd in ['quit', 'q', 'exit']:
                 sys.exit(0)
+
+            elif cmd:
+                print 'command not found'
 
     sock.close()
 

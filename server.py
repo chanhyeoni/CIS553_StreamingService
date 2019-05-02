@@ -122,7 +122,7 @@ def client_write(client, client_socket, client_port, songs_dic, musicdir):
                     break
                 
                 send_response(client, client_socket, 200, content_body)
-                
+             
         except (KeyboardInterrupt, SystemExit):
             print "client_write --> keyboardInterrupt"
             break
